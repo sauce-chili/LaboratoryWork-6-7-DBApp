@@ -1,6 +1,6 @@
-package ru.vstu.repositories.cinameRepository
+package domain.repositories.cinameRepository
 
-import ru.vstu.model.Cinema
+import domain.model.Cinema
 
 interface CinemaRepository {
     suspend fun getAll(): List<Cinema>
