@@ -13,7 +13,7 @@ class PostgresSeanceRepository(private val connector: PostgresConnector) : Seanc
         connector.getConnection()?.use { connection ->
             connection.prepareStatement(
                 """
-                SELECT s.id as seance_id, m.title as movie_name, m.description, m.raiting as rating, m.url_poster,
+                SELECT s.id as seance_id,m.id as movie_id, m.title as movie_name, m.description, m.raiting as rating, m.url_poster,
                        c.id as cinema_id, c.name as cinema_name, c.address as cinema_address,
                        s.date as seance_date, h.id as hall_id, h.cinema_id, h."has_3D", h.hall_number
                 FROM "Seance" s
@@ -39,7 +39,7 @@ class PostgresSeanceRepository(private val connector: PostgresConnector) : Seanc
         connector.getConnection()?.use { connection ->
             connection.prepareStatement(
                 """
-                SELECT s.id as seance_id, m.title as movie_name, m.description, m.raiting as rating, m.url_poster,
+                SELECT s.id as seance_id,m.id as movie_id, m.title as movie_name, m.description, m.raiting as rating, m.url_poster,
                        c.id as cinema_id, c.name as cinema_name, c.address as cinema_address,
                        s.date as seance_date, h.id as hall_id, h.cinema_id, h."has_3D", h.hall_number
                 FROM "Seance" s

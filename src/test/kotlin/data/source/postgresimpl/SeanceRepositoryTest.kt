@@ -27,6 +27,7 @@ class SeanceRepositoryTests {
         val expectedSeance = SeanceDetail(
             seanceId = 3,
             movie = Movie(
+                id = 3,
                 name = "Побег из Шоушенка",
                 description = "Несправедливо осужденный банкир готовит побег из тюрьмы. Тим Роббинс в выдающейся экранизации Стивена Кинга",
                 rating = 9.3f,
@@ -51,6 +52,7 @@ class SeanceRepositoryTests {
             SeanceDetail(
                 seanceId = 1,
                 movie = Movie(
+                    id= 9,
                     "Список Шиндлера",
                     "История немецкого промышленника, спасшего тысячи жизней во время Холокоста. Драма Стивена Спилберга",
                     9.00f,
@@ -63,6 +65,7 @@ class SeanceRepositoryTests {
             SeanceDetail(
                 seanceId = 2,
                 movie = Movie(
+                    id=6,
                     "Бойцовский клуб",
                     "Страховой работник разрушает рутину своей благополучной жизни. Культовая драма по книге Чака Паланика",
                     8.80f,

@@ -12,6 +12,7 @@ fun ResultSet.toCinema(): Cinema = Cinema(
 )
 
 fun ResultSet.toMovie(): Movie = Movie(
+    id = getString("movie_id").toLong(),
     name = getString("movie_name"),
     description = getString("description"),
     rating = getFloat("rating"),
