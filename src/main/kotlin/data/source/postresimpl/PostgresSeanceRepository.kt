@@ -4,11 +4,10 @@ import domain.model.*
 import domain.repositories.seanceRepository.SeanceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.sql.Date
 import java.sql.SQLException
 import java.sql.Timestamp
 
-class PostgresSeanceRepository(private val connector: PostgresConnector) : SeanceRepository {
+class PostgresSeanceRepository(private val connector: Connector) : SeanceRepository {
 
     override suspend fun getDetailedSeance(seanceId: Long): SeanceDetail = withContext(Dispatchers.IO) {
         connector.getConnection()?.use { connection ->
