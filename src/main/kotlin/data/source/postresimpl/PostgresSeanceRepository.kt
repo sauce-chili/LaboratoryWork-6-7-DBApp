@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.sql.Date
 import java.sql.SQLException
+import java.sql.Timestamp
 
 class PostgresSeanceRepository(private val connector: PostgresConnector) : SeanceRepository {
 
@@ -88,7 +89,8 @@ class PostgresSeanceRepository(private val connector: PostgresConnector) : Seanc
             ).apply {
                 setLong(1, data.movieId)
                 setLong(2, data.hallId)
-                setDate(3, Date(data.date.time))
+                val sqlTimestamp = Timestamp(data.date.time)
+                setTimestamp(3, sqlTimestamp)
                 executeUpdate()
             }
         } ?: throw SQLException("Unable to get database connection")
@@ -142,7 +144,8 @@ class PostgresSeanceRepository(private val connector: PostgresConnector) : Seanc
             ).apply {
                 setLong(1, data.info.movieId)
                 setLong(2, data.info.hallId)
-                setDate(3, Date(data.info.date.time))
+                val sqlTimestamp = Timestamp(data.info.date.time)
+                setTimestamp(3, sqlTimestamp)
                 setLong(4, data.id)
                 executeUpdate()
             }
