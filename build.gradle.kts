@@ -33,6 +33,8 @@ dependencies {
     implementation("org.postgresql:postgresql:$postgres_version")
     implementation("com.h2database:h2:$h2_version")
 
+    implementation("org.jetbrains.compose.material3:material3-desktop:1.6.0")
+
     // serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$serialization_version")
 
