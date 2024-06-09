@@ -14,7 +14,9 @@ class PostgresCinemaRepository(private val connector: Connector) : CinemaReposit
             val cinemas = mutableListOf<Cinema>()
             connection.use { conn ->
                 val statement = conn?.createStatement()
-                val resultSet = statement?.executeQuery("SELECT id, name, address FROM public.\"Cinema\"")
+                val resultSet = statement?.executeQuery("""
+                    SELECT id as cinema_id, name as cinema_name, address as cinema_address FROM public."Cinema"
+                """.trimMargin())
                 resultSet?.apply {
                     while (next()) {
                         cinemas.add(toCinema())
