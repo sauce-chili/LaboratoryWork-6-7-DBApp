@@ -1,62 +1,20 @@
-//import androidx.compose.desktop.ui.tooling.preview.Preview
-//import androidx.compose.foundation.layout.Arrangement
-//import androidx.compose.foundation.layout.Column
-//import androidx.compose.foundation.layout.fillMaxHeight
-//import androidx.compose.foundation.layout.fillMaxWidth
-//import androidx.compose.material.Button
-//import androidx.compose.material.MaterialTheme
-//import androidx.compose.material.Text
-//import androidx.compose.runtime.Composable
-//import androidx.compose.runtime.getValue
-//import androidx.compose.runtime.mutableStateOf
-//import androidx.compose.runtime.remember
-//import androidx.compose.runtime.setValue
-//import androidx.compose.ui.Alignment
-//import androidx.compose.ui.Modifier
-//import androidx.compose.ui.window.Window
-//import androidx.compose.ui.window.application
-
-//@Composable
-//@Preview
-//fun App() {
-//    var text by remember { mutableStateOf("Hello, World!") }
-//
-//    MaterialTheme {
-//        Column(
-//            modifier = Modifier.fillMaxWidth().fillMaxHeight(),
-//            verticalArrangement = Arrangement.Center,
-//            horizontalAlignment = Alignment.CenterHorizontally
-//        ) {
-//            Button(onClick = {
-//                text = "Hello, Desktop!"
-//            }) {
-//                Text(text)
-//            }
-//        }
-//    }
-//}
-//
-//fun main() = application {
-//    Window(onCloseRequest = ::exitApplication) {
-//        App()
-//    }
-//}
-
-import androidx.compose.desktop.ui.tooling.preview.Preview
-import org.jetbrains.skia.Image
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.loadImageBitmap
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import domain.model.Seance
@@ -65,17 +23,12 @@ import domain.model.SeanceInfo
 import domain.repositories.seanceRepository.SeanceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Date
 import data.source.postresimpl.PostgresConnector
 import data.source.postresimpl.PostgresSeanceRepository
 import kotlinx.coroutines.withContext
-import java.awt.image.BufferedImage
-import java.net.URL
-import javax.imageio.ImageIO
+import java.time.*
+import java.time.format.DateTimeFormatter
 
 suspend fun loadDefaultImage(): ImageBitmap {
     return withContext(Dispatchers.IO) {
@@ -94,11 +47,20 @@ fun MainPage(seanceRepository: SeanceRepository) {
         seances = seanceRepository.getAllDetailedSeances()
     }
 
-    Column {
-        Row {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.Center,
+        ) {
             Button(onClick = { selectedTab = "Сеансы" }) { Text("Сеансы") }
             Button(onClick = { selectedTab = "Фильмы" }) { Text("Фильмы") }
         }
+        Button(onClick = {
+            coroutineScope.launch {
+                seances = seanceRepository.getAllDetailedSeances()
+            }
+        }) { Text("Обновить") }
         if (selectedTab == "Фильмы") {
             MovieList(seances, seanceRepository)
         } else {
@@ -109,19 +71,23 @@ fun MainPage(seanceRepository: SeanceRepository) {
 
 @Composable
 fun MovieList(seances: List<SeanceDetail>, seanceRepository: SeanceRepository) {
-    LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+    ) {
         items(seances) { seance ->
             MovieListItem(seance, seanceRepository)
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MovieListItem(seance: SeanceDetail, seanceRepository: SeanceRepository) {
     var editing by remember { mutableStateOf(false) }
     var selectedCinema by remember { mutableStateOf("${seance.cinema.name}; ${seance.cinema.address}") }
     var selectedHall by remember { mutableStateOf("${seance.hall.hallNumber}") }
-    var selectedDate by remember { mutableStateOf(seance.seanceDate) }
+    var selectedDate by remember { mutableStateOf(seance.seanceDate.toLocalDateTime()) }
+    var selectedMovie by remember { mutableStateOf(seance.movie.name) }
     val coroutineScope = rememberCoroutineScope()
     var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
 
@@ -135,115 +101,323 @@ fun MovieListItem(seance: SeanceDetail, seanceRepository: SeanceRepository) {
                 Image(bitmap = it, contentDescription = null, modifier = Modifier.size(128.dp).padding(8.dp))
             }
             Spacer(modifier = Modifier.width(8.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = seance.movie.name, style = MaterialTheme.typography.h6)
-                Text(text = seance.movie.description ?: "", style = MaterialTheme.typography.body1)
-                Text(text = "Рейтинг: ${seance.movie.rating ?: 0.0}", style = MaterialTheme.typography.body2)
+            Column(modifier = Modifier.fillMaxSize(0.7f).weight(1f)) {
+                Text(text = seance.movie.name, style = MaterialTheme.typography.titleMedium)
+                Text(text = seance.movie.description ?: "", style = MaterialTheme.typography.bodyMedium)
+                Text(text = "Рейтинг: ${seance.movie.rating ?: 0.0}", style = MaterialTheme.typography.bodySmall)
                 if (editing) {
-                    // Dropdown for cinema
+                    MovieDropdown(selectedMovie) { selectedMovie = it }
                     CinemaDropdown(selectedCinema) { selectedCinema = it }
-                    // Dropdown for hall
                     HallDropdown(selectedHall) { selectedHall = it }
-                    // Date picker
-                    DatePicker(selectedDate) { selectedDate = it }
+                    DatePickerButton(selectedDate) { newDate ->
+                        selectedDate = newDate
+                    }
                 } else {
-                    Text(text = "Кинотеатр: ${seance.cinema.name}; ${seance.cinema.address}", style = MaterialTheme.typography.body2)
-                    Text(text = "Зал: ${seance.hall.hallNumber}", style = MaterialTheme.typography.body2)
-                    Text(text = "Дата: ${seance.seanceDate}", style = MaterialTheme.typography.body2)
+                    Text(
+                        text = "Кинотеатр: ${seance.cinema.name}; ${seance.cinema.address}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(text = "Зал: ${seance.hall.hallNumber}", style = MaterialTheme.typography.bodySmall)
+                    Text(text = "Дата: ${seance.seanceDate}", style = MaterialTheme.typography.bodySmall)
                 }
             }
-            if (editing) {
-                Column {
-                    Button(onClick = {
-                        // Save changes
-                        coroutineScope.launch {
-                            seanceRepository.update(
-                                Seance(
-                                    id = seance.seanceId,
-                                    info = SeanceInfo(
-                                        movieId = seance.seanceId,
-                                        hallId = selectedHall.toLong(),
-                                        date = selectedDate
+            val buttonModifier = Modifier.width(155.dp).padding(4.dp)
+
+            Column(
+                modifier = Modifier.fillMaxSize(0.2f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                if (editing) {
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                seanceRepository.update(
+                                    Seance(
+                                        id = seance.seanceId,
+                                        info = SeanceInfo(
+                                            movieId = seance.movie.id,  // здесь должна быть правильная логика получения movieId
+                                            hallId = selectedHall.toLong(),  // преобразование строки в Long
+                                            date = Date.from(selectedDate.atZone(ZoneId.systemDefault()).toInstant())
+                                        )
                                     )
                                 )
-                            )
-                            editing = false
-                        }
-                    }) { Text("Сохранить") }
+                                editing = false
+                            }
+                        },
+                        modifier = buttonModifier,
+                    ) { Text("Сохранить") }
                     Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = { editing = false }) { Text("Отмена") }
-                }
-            } else {
-                Column {
-                    Button(onClick = { editing = true }) { Text("Редактировать") }
+                    Button(onClick = { editing = false }, modifier = buttonModifier) { Text("Отмена") }
+                } else {
+                    Button(onClick = { editing = true }, modifier = buttonModifier) { Text("Редактировать") }
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(onClick = {
-                        // Delete confirmation
                         if (confirm("Вы уверены, что хотите удалить этот сеанс?")) {
                             coroutineScope.launch { seanceRepository.deleteById(seance.seanceId) }
                         }
-                    }) { Text("Удалить") }
+                    }, modifier = buttonModifier) { Text("Удалить") }
+
                 }
             }
         }
     }
 }
 
+fun Date.toLocalDateTime(): LocalDateTime {
+    return this.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DatePickerButton(selectedDateTime: LocalDateTime?, onDateTimeSelected: (LocalDateTime) -> Unit) {
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var tempDate by remember { mutableStateOf<LocalDate?>(null) }
+    val hourState = remember { mutableStateOf(TextFieldValue("0")) }
+    val minuteState = remember { mutableStateOf(TextFieldValue("0")) }
+
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDatePicker = false
+                    showTimePicker = true
+                }) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancel")
+                }
+            },
+            properties = DialogProperties()
+        ) {
+            val datePickerState = rememberDatePickerState()
+            DatePicker(
+                state = datePickerState,
+                modifier = Modifier.fillMaxWidth()
+            )
+            LaunchedEffect(datePickerState.selectedDateMillis) {
+                datePickerState.selectedDateMillis?.let {
+                    tempDate = LocalDate.ofEpochDay(it / (24 * 60 * 60 * 1000))
+                }
+            }
+        }
+    }
+
+    if (showTimePicker && tempDate != null) {
+        TimePickerDialog(
+            onDismissRequest = { showTimePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    val selectedTime = LocalTime.of(
+                        hourState.value.text.toInt(),
+                        minuteState.value.text.toInt()
+                    )
+                    val selectedDateTime = LocalDateTime.of(tempDate, selectedTime)
+                    onDateTimeSelected(selectedDateTime)
+                    showTimePicker = false
+                }) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) {
+                    Text("Cancel")
+                }
+            },
+            hourState = hourState,
+            minuteState = minuteState
+        )
+    }
+
+    OutlinedButton(onClick = { showDatePicker = true }) {
+        Text(text = selectedDateTime?.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) ?: "Select Date and Time")
+    }
+}
+
+@Composable
+fun TimePickerDialog(
+    title: String = "Select Time",
+    onDismissRequest: () -> Unit,
+    confirmButton: @Composable (() -> Unit),
+    dismissButton: @Composable (() -> Unit),
+    containerColor: Color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
+    hourState: MutableState<TextFieldValue>,
+    minuteState: MutableState<TextFieldValue>
+) {
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false
+        ),
+    ) {
+        Surface(
+            shape = androidx.compose.material3.MaterialTheme.shapes.extraLarge,
+            tonalElevation = 6.dp,
+            modifier = Modifier
+                .width(IntrinsicSize.Min)
+                .height(IntrinsicSize.Min)
+                .background(
+                    shape = androidx.compose.material3.MaterialTheme.shapes.extraLarge,
+                    color = containerColor
+                ),
+            color = containerColor
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 20.dp),
+                    text = title,
+                    style = androidx.compose.material3.MaterialTheme.typography.labelMedium
+                )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    OutlinedTextField(
+                        value = hourState.value,
+                        onValueChange = { hourState.value = it },
+                        label = { Text("Hour") },
+                        modifier = Modifier.width(100.dp)
+                    )
+                    OutlinedTextField(
+                        value = minuteState.value,
+                        onValueChange = { minuteState.value = it },
+                        label = { Text("Minute") },
+                        modifier = Modifier.width(100.dp)
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .height(40.dp)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    dismissButton()
+                    confirmButton()
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MovieDropdown(selectedMovie: String, onMovieSelected: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val movies = listOf("Movie 1", "Movie 2", "Movie 3")
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded }
+    ) {
+        OutlinedTextField(
+            value = selectedMovie,
+            onValueChange = onMovieSelected,
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(),
+            label = { Text("Movie") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            readOnly = true
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            movies.forEach { movie ->
+                DropdownMenuItem(
+                    text = { Text(movie) },
+                    onClick = {
+                        onMovieSelected(movie)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CinemaDropdown(selectedCinema: String, onCinemaSelected: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    val cinemas = listOf("Cinema 1; Address 1", "Cinema 2; Address 2") // Replace with actual data
+    val cinemas = listOf("Cinema 1", "Cinema 2", "Cinema 3")
 
-    Box {
-        TextField(value = selectedCinema, onValueChange = {}, readOnly = true, modifier = Modifier.clickable { expanded = true })
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded }
+    ) {
+        OutlinedTextField(
+            value = selectedCinema,
+            onValueChange = onCinemaSelected,
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(),
+            label = { Text("Cinema") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            readOnly = true
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
             cinemas.forEach { cinema ->
-                DropdownMenuItem(onClick = {
-                    onCinemaSelected(cinema)
-                    expanded = false
-                }) {
-                    Text(cinema)
-                }
+                DropdownMenuItem(
+                    text = { Text(cinema) },
+                    onClick = {
+                        onCinemaSelected(cinema)
+                        expanded = false
+                    }
+                )
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HallDropdown(selectedHall: String, onHallSelected: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    val halls = listOf("1", "2", "3") // Replace with actual data
+    val halls = listOf("Hall 1", "Hall 2", "Hall 3")
 
-    Box {
-        TextField(value = selectedHall, onValueChange = {}, readOnly = true, modifier = Modifier.clickable { expanded = true })
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded }
+    ) {
+        OutlinedTextField(
+            value = selectedHall,
+            onValueChange = onHallSelected,
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(),
+            label = { Text("Hall") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            readOnly = true
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
             halls.forEach { hall ->
-                DropdownMenuItem(onClick = {
-                    onHallSelected(hall)
-                    expanded = false
-                }) {
-                    Text(hall)
-                }
+                DropdownMenuItem(
+                    text = { Text(hall) },
+                    onClick = {
+                        onHallSelected(hall)
+                        expanded = false
+                    }
+                )
             }
         }
     }
-}
-
-@Composable
-fun DatePicker(selectedDate: Date, onDateSelected: (Date) -> Unit) {
-    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-    var dateText by remember { mutableStateOf(selectedDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().format(formatter)) }
-
-    OutlinedTextField(
-        value = dateText,
-        onValueChange = {
-            dateText = it
-            val date = LocalDate.parse(it, formatter)
-            onDateSelected(Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant()))
-        },
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text("Дата сеанса") }
-    )
 }
 
 fun confirm(message: String): Boolean {
@@ -257,4 +431,3 @@ fun main() = application {
         MainPage(seanceRepository)
     }
 }
-
