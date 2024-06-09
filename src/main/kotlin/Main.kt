@@ -3,6 +3,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -43,12 +45,16 @@ fun MainPage(
     cinemaRepository: CinemaRepository,
     hallRepository: HallRepository
 ) {
-    var selectedTab by remember { mutableStateOf("Фильмы") }
+    var selectedTab by remember { mutableStateOf("Сеансы") }
     val coroutineScope = rememberCoroutineScope()
     var seances by remember { mutableStateOf(listOf<SeanceDetail>()) }
+    var movies by remember { mutableStateOf(listOf<Movie>()) }
+    var showDialog by remember { mutableStateOf(false) }
+    var showMovieDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         seances = seanceRepository.getAllDetailedSeances()
+        movies = movieRepository.getAllMovies()
     }
 
     Column(
@@ -63,10 +69,11 @@ fun MainPage(
         Button(onClick = {
             coroutineScope.launch {
                 seances = seanceRepository.getAllDetailedSeances()
+                movies = movieRepository.getAllMovies()
             }
         }) { Text("Обновить") }
-        if (selectedTab == "Фильмы") {
-            MovieList(
+        if (selectedTab == "Сеансы") {
+            SeanceList(
                 seances,
                 seanceRepository,
                 movieRepository,
@@ -74,13 +81,232 @@ fun MainPage(
                 hallRepository
             )
         } else {
-            // Implement Seance list page
+            MovieList(
+                movies,
+                movieRepository
+            )
+        }
+    }
+
+    FloatingActionButton(
+        onClick = {
+            if (selectedTab == "Сеансы") {
+                showDialog = true
+            } else {
+                showMovieDialog = true
+            }
+        },
+        modifier = Modifier.padding(16.dp)
+    ) {
+        Icon(imageVector = Icons.Default.Add, contentDescription = "Add")
+    }
+
+    if (showDialog) {
+        CreateSeanceDialog(
+            movieRepository = movieRepository,
+            cinemaRepository = cinemaRepository,
+            hallRepository = hallRepository,
+            onDismissRequest = { showDialog = false }
+        ) { seanceInfo ->
+            coroutineScope.launch {
+                seanceRepository.create(seanceInfo)
+                seances = seanceRepository.getAllDetailedSeances()
+                showDialog = false
+            }
+        }
+    }
+
+    if (showMovieDialog) {
+        CreateMovieDialog(
+            movieRepository = movieRepository,
+            onDismissRequest = { showMovieDialog = false }
+        ) { movie ->
+            coroutineScope.launch {
+                movieRepository.createMovie(movie)
+                movies = movieRepository.getAllMovies()
+                showMovieDialog = false
+            }
         }
     }
 }
 
 @Composable
 fun MovieList(
+    movies: List<Movie>,
+    movieRepository: MovieRepository
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+    ) {
+        items(movies) { movie ->
+            MovieListItem(
+                movie,
+                movieRepository
+            )
+        }
+    }
+}
+
+@Composable
+fun MovieListItem(
+    movie: Movie,
+    movieRepository: MovieRepository
+) {
+    var editing by remember { mutableStateOf(false) }
+    var editedName by remember { mutableStateOf(TextFieldValue(movie.name)) }
+    var editedDescription by remember { mutableStateOf(TextFieldValue(movie.description ?: "")) }
+    var editedRating by remember { mutableStateOf(TextFieldValue(movie.rating.toString())) }
+    val coroutineScope = rememberCoroutineScope()
+    var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+
+    LaunchedEffect(Unit) {
+        imageBitmap = loadDefaultImage()
+    }
+
+    Card(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+            imageBitmap?.let {
+                Image(bitmap = it, contentDescription = null, modifier = Modifier.size(128.dp).padding(8.dp))
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.fillMaxSize(0.7f).weight(1f)) {
+                if (editing) {
+                    OutlinedTextField(
+                        value = editedName,
+                        onValueChange = { editedName = it },
+                        label = { Text("Название") }
+                    )
+                    OutlinedTextField(
+                        value = editedDescription,
+                        onValueChange = { editedDescription = it },
+                        label = { Text("Описание") }
+                    )
+                    OutlinedTextField(
+                        value = editedRating,
+                        onValueChange = {
+                            if (it.text.matches(Regex("^[0-9]{0,1}(\\.[0-9]{0,2})?\$"))) {
+                                editedRating = it
+                            }
+                        },
+                        label = { Text("Рейтинг") }
+                    )
+                } else {
+                    Text(text = movie.name, style = MaterialTheme.typography.titleMedium)
+                    Text(text = movie.description ?: "", style = MaterialTheme.typography.bodyMedium)
+                    Text(text = movie.posterUrl ?: "", style = MaterialTheme.typography.bodyMedium)
+                    Text(text = "Рейтинг: ${movie.rating ?: 0.0}", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            val buttonModifier = Modifier.width(155.dp).padding(4.dp)
+
+            Column(
+                modifier = Modifier.fillMaxSize(0.2f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                if (editing) {
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                movieRepository.updateMovie(
+                                    movie.id,
+                                    movie.copy(
+                                        name = editedName.text,
+                                        description = editedDescription.text,
+                                        rating = editedRating.text.toFloat()
+                                    )
+                                )
+                                editing = false
+                            }
+                        },
+                        modifier = buttonModifier,
+                    ) { Text("Сохранить") }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = { editing = false }, modifier = buttonModifier) { Text("Отмена") }
+                } else {
+                    Button(onClick = { editing = true }, modifier = buttonModifier) { Text("Редактировать") }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = {
+                        if (confirm("Вы уверены, что хотите удалить этот фильм?")) {
+                            coroutineScope.launch { movieRepository.deleteMovieById(movie.id) }
+                        }
+                    }, modifier = buttonModifier) { Text("Удалить") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CreateMovieDialog(
+    movieRepository: MovieRepository,
+    onDismissRequest: () -> Unit,
+    onMovieCreated: (Movie) -> Unit
+) {
+    var name by remember { mutableStateOf(TextFieldValue("")) }
+    var description by remember { mutableStateOf(TextFieldValue("")) }
+    var rating by remember { mutableStateOf(TextFieldValue("")) }
+    var posterUrl by remember { mutableStateOf(TextFieldValue("")) }
+
+    Dialog(onDismissRequest = onDismissRequest) {
+        Column(
+            modifier = Modifier.padding(16.dp).background(Color.White).padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("Создать новый фильм", style = MaterialTheme.typography.titleLarge)
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Название") }
+            )
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("Описание") }
+            )
+            OutlinedTextField(
+                value = posterUrl,
+                onValueChange = { posterUrl = it },
+                label = { Text("URL постера") }
+            )
+            OutlinedTextField(
+                value = rating,
+                onValueChange = {
+                    if (it.text.matches(Regex("^[0-9]{0,1}(\\.[0-9]{0,2})?\$"))) {
+                        rating = it
+                    }
+                },
+                label = { Text("Рейтинг") }
+            )
+            Row(
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            ) {
+                Button(onClick = onDismissRequest) {
+                    Text("Отмена")
+                }
+                Button(onClick = {
+                    if (name.text.isNotEmpty() && rating.text.toDoubleOrNull() != null) {
+                        onMovieCreated(
+                            Movie(
+                                id = -1,
+                                name = name.text,
+                                description = description.text,
+                                rating = rating.text.toFloat(),
+                                posterUrl = posterUrl.text
+                            )
+                        )
+                    }
+                }) {
+                    Text("Создать")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SeanceList(
     seances: List<SeanceDetail>,
     seanceRepository: SeanceRepository,
     movieRepository: MovieRepository,
@@ -91,7 +317,7 @@ fun MovieList(
         modifier = Modifier.fillMaxSize().padding(16.dp),
     ) {
         items(seances) { seance ->
-            MovieListItem(
+            SeanceListItem(
                 seance,
                 seanceRepository,
                 movieRepository,
@@ -103,7 +329,7 @@ fun MovieList(
 }
 
 @Composable
-fun MovieListItem(
+fun SeanceListItem(
     seance: SeanceDetail,
     seanceRepository: SeanceRepository,
     movieRepository: MovieRepository,
@@ -357,7 +583,7 @@ fun TimePickerDialog(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MovieDropdown(
-    selectedMovie: Movie,
+    selectedMovie: Movie?,
     movieRepository: MovieRepository,
     onMovieSelected: (Movie) -> Unit,
 ) {
@@ -371,7 +597,7 @@ fun MovieDropdown(
         onExpandedChange = { expanded = !expanded }
     ) {
         OutlinedTextField(
-            value = selectedMovie.name,
+            value = selectedMovie?.name ?: "",
             onValueChange = {},
             modifier = Modifier.fillMaxWidth().menuAnchor(),
             label = { Text("Movie") },
@@ -398,7 +624,7 @@ fun MovieDropdown(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CinemaDropdown(
-    selectedCinema: Cinema,
+    selectedCinema: Cinema?,
     cinemaRepository: CinemaRepository,
     onCinemaSelected: (Cinema) -> Unit,
 ) {
@@ -412,7 +638,7 @@ fun CinemaDropdown(
         onExpandedChange = { expanded = !expanded }
     ) {
         OutlinedTextField(
-            value = "${selectedCinema.name}; ${selectedCinema.address}",
+            value = selectedCinema?.let { "${it.name}; ${it.address}" } ?: "",
             onValueChange = {},
             modifier = Modifier.fillMaxWidth().menuAnchor(),
             label = { Text("Cinema") },
@@ -439,7 +665,7 @@ fun CinemaDropdown(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HallDropdown(
-    selectedHall: SeanceHall,
+    selectedHall: SeanceHall?,
     selectedCinemaId: Long,
     hallRepository: HallRepository,
     onHallSelected: (SeanceHall) -> Unit,
@@ -454,7 +680,7 @@ fun HallDropdown(
         onExpandedChange = { expanded = !expanded }
     ) {
         OutlinedTextField(
-            value = selectedHall.hallNumber.toString(),
+            value = selectedHall?.hallNumber?.toString() ?: "",
             onValueChange = {},
             modifier = Modifier.fillMaxWidth().menuAnchor(),
             label = { Text("Hall") },
@@ -473,6 +699,80 @@ fun HallDropdown(
                         expanded = false
                     }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun CreateSeanceDialog(
+    movieRepository: MovieRepository,
+    cinemaRepository: CinemaRepository,
+    hallRepository: HallRepository,
+    onDismissRequest: () -> Unit,
+    onSeanceCreated: (SeanceInfo) -> Unit
+) {
+    var selectedMovie by remember { mutableStateOf<Movie?>(null) }
+    var selectedCinema by remember { mutableStateOf<Cinema?>(null) }
+    var selectedHall by remember { mutableStateOf<SeanceHall?>(null) }
+    var selectedDate by remember { mutableStateOf<Date?>(null) }
+
+    Dialog(onDismissRequest = onDismissRequest) {
+        Column(
+            modifier = Modifier.padding(16.dp).background(Color.White).padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("Создать новый сеанс", style = MaterialTheme.typography.titleLarge)
+
+            MovieDropdown(selectedMovie = selectedMovie, movieRepository = movieRepository) {
+                selectedMovie = it
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (selectedMovie != null) {
+                CinemaDropdown(selectedCinema = selectedCinema, cinemaRepository = cinemaRepository) {
+                    selectedCinema = it
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            if (selectedCinema != null) {
+                HallDropdown(
+                    selectedHall = selectedHall,
+                    selectedCinemaId = selectedCinema!!.id,
+                    hallRepository = hallRepository
+                ) {
+                    selectedHall = it
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            DatePickerButton(selectedDate?.toLocalDateTime()) {
+                selectedDate = it.toDate()
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            ) {
+                Button(onClick = onDismissRequest) {
+                    Text("Отмена")
+                }
+                Button(onClick = {
+                    if (selectedMovie != null && selectedHall != null && selectedDate != null) {
+                        onSeanceCreated(
+                            SeanceInfo(
+                                movieId = selectedMovie!!.id,
+                                hallId = selectedHall!!.hallId,
+                                date = selectedDate!!
+                            )
+                        )
+                        onDismissRequest()
+                    }
+                }) {
+                    Text("Создать")
+                }
             }
         }
     }
