@@ -28,6 +28,7 @@ import domain.repositories.cinameRepository.CinemaRepository
 import domain.repositories.hallRepository.HallRepository
 import domain.repositories.movieRepository.MovieRepository
 import kotlinx.coroutines.withContext
+import java.sql.SQLException
 import java.time.*
 import java.time.format.DateTimeFormatter
 
@@ -37,6 +38,8 @@ suspend fun loadDefaultImage(): ImageBitmap {
         loadImageBitmap(imageStream!!)
     }
 }
+
+// TODO split this shit-code into screens files
 
 @Composable
 fun MainPage(
@@ -118,7 +121,6 @@ fun MainPage(
 
     if (showMovieDialog) {
         CreateMovieDialog(
-            movieRepository = movieRepository,
             onDismissRequest = { showMovieDialog = false }
         ) { movie ->
             coroutineScope.launch {
@@ -158,6 +160,19 @@ fun MovieListItem(
     var editedRating by remember { mutableStateOf(TextFieldValue(movie.rating.toString())) }
     val coroutineScope = rememberCoroutineScope()
     var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    var errorMsg by remember { mutableStateOf("") }
+
+    if (errorMsg != "") {
+        AlertDialog(
+            onDismissRequest = { errorMsg = "" },
+            confirmButton = {
+                Button(onClick = { errorMsg = "" }) {
+                    Text("OK")
+                }
+            },
+            text = { Text(errorMsg) }
+        )
+    }
 
     LaunchedEffect(Unit) {
         imageBitmap = loadDefaultImage()
@@ -227,8 +242,18 @@ fun MovieListItem(
                     Button(onClick = { editing = true }, modifier = buttonModifier) { Text("Редактировать") }
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(onClick = {
-                        if (confirm("Вы уверены, что хотите удалить этот фильм?")) {
-                            coroutineScope.launch { movieRepository.deleteMovieById(movie.id) }
+                        coroutineScope.launch {
+                            try {
+                                movieRepository.deleteMovieById(movie.id)
+                            } catch (
+                                e: SQLException
+                            ) {
+                                if (e.sqlState == "23503") { //
+                                    errorMsg = "Не возможно удалить фильм, тк на него ссылается сеанс"
+                                } else {
+                                    errorMsg = "Ошибка: ${e.message ?: "неизвестна"}"
+                                }
+                            }
                         }
                     }, modifier = buttonModifier) { Text("Удалить") }
                 }
@@ -237,9 +262,9 @@ fun MovieListItem(
     }
 }
 
+
 @Composable
 fun CreateMovieDialog(
-    movieRepository: MovieRepository,
     onDismissRequest: () -> Unit,
     onMovieCreated: (Movie) -> Unit
 ) {
@@ -414,9 +439,7 @@ fun SeanceListItem(
                     Button(onClick = { editing = true }, modifier = buttonModifier) { Text("Редактировать") }
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(onClick = {
-                        if (confirm("Вы уверены, что хотите удалить этот сеанс?")) {
-                            coroutineScope.launch { seanceRepository.deleteById(seance.seanceId) }
-                        }
+                        coroutineScope.launch { seanceRepository.deleteById(seance.seanceId) }
                     }, modifier = buttonModifier) { Text("Удалить") }
 
                 }
@@ -776,11 +799,6 @@ fun CreateSeanceDialog(
             }
         }
     }
-}
-
-fun confirm(message: String): Boolean {
-    // Implement confirmation dialog here
-    return true
 }
 
 fun main() = application {
